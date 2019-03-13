@@ -1,0 +1,554 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <script src="https://code.jquery.com/jquery-3.1.1.min.js" integrity="sha256-hVVnYaiADRTO2PzUGmuLJr8BLUSjGIZsDYGmIJLv2b8=" crossorigin="anonymous"></script>
+        <script src="scripts/Tank.js"></script>
+        <script src="scripts/Projectile.js"></script>
+        <style>
+            body {background-color: powderblue;}
+            canvas {
+                font-family: retroFont;
+                color: white;
+            }
+            #load {
+                font-family: retroFont;
+                visibility: hidden;
+                height: 0px;
+            }
+            @font-face {
+                font-family: retroFont;
+                src: url(fonts/ARCADECLASSIC.TTF);
+            }
+        </style>
+    </head>
+    <body>
+        <div id="load">preloadFont</div>
+        <canvas id="field" tabindex='1'></canvas>
+        
+        
+        <script>
+            'use strict';
+            
+            var canvas,
+                ctx,
+                player,
+                projectiles = [],
+                enemyProj = [],
+                enemies = [],
+                explosions = [],
+                pSize = 30,
+                width = window.innerHeight - 20,
+                height = window.innerHeight - 20 ,
+                keysdown = [],
+                up = new Image(),
+                down = new Image(),
+                left = new Image(),
+                right = new Image(),
+                upright = new Image(),
+                downright = new Image(),
+                upleft = new Image(),
+                downleft = new Image(),
+                ex1 = new Image(),
+                ex2 = new Image(),
+                ex3 = new Image(),
+                ex4 = new Image(),
+                ex5 = new Image(),
+                ex6 = new Image(),
+                base1 = new Image(),
+                projectileCounter,
+                EProjCount,
+                roundStart,
+                baseHealth,
+                round,
+                difficulty,
+                score,
+                updateInterval,
+                menu,
+                spawnCounter = 0,
+                roundMobs,
+                scrapEn = [],
+                scrapPr = [],
+                finalRound,
+                finalCounter,
+                loss,
+                roundSound,
+                fireSound,
+                explosionSound;
+            
+            $('#field').on('click', function(e) { e.target.focus(); });
+            
+            function startUp() {
+                menu = true;
+                loss = false;
+                canvas = document.getElementById("field");
+                canvas.width = width;
+                canvas.height = height;
+                ctx = canvas.getContext("2d");
+                ctx.imageSmoothingEnabled = false;
+                menuScreen();
+                $(canvas).click(function(e) {
+                    var x = e.pageX;
+                    var y = e.pageY;
+                    if (x < width/3 * 2 && x > width/3 && y < height/2 + 40 && y > height/2 - 40 && menu) {
+                        difficulty = prompt("Choose your Difficulty Level! (Enter 1 for easy, 2 for medium, or 3 for hard)", "1");
+                        if (!(difficulty > 0 && difficulty < 4)) {
+                            menuScreen();
+                        }
+                        else {
+                            menu = false;
+                            startGame();
+                        }
+                    }
+                });
+                
+            }
+            
+            $(window).on('load', function() {
+                
+                up.src = 'sprite/up.png';
+                down.src = 'sprite/down.png';
+                left.src = 'sprite/left.png';
+                right.src = 'sprite/right.png';
+                upright.src = 'sprite/ur.png';
+                downright.src = 'sprite/dr.png';
+                upleft.src = 'sprite/ul.png';
+                downleft.src = 'sprite/dl.png';
+                ex1.src = 'sprite/explosion1.png';
+                ex2.src = 'sprite/explosion2.png';
+                ex3.src = 'sprite/explosion3.png';
+                ex4.src = 'sprite/explosion4.png';
+                ex5.src = 'sprite/explosion5.png';
+                ex6.src = 'sprite/explosion6.png';
+                base1.src = 'sprite/base1.png';
+                roundSound = new Audio('sounds/new_round.wav');
+                fireSound = new Audio('sounds/fire.wav');
+                explosionSound = new Audio('sounds/explosion.wav');
+                fireSound.volume = 0.5;
+                startUp();
+            });
+                         
+            function startGame() {
+                var temp = document.getElementById('field').focus();
+                ctx.fillStyle = 'rgb(5,5,5)';
+                projectiles = [];
+                enemyProj = [];
+                enemies = [];
+                explosions = [];
+                canvas.style.background = "rgba(207, 215, 119, 1)";
+                player = new tank(width / 2 + (pSize * 4), (height / 2) - (pSize / 2), 'right', pSize, 1);
+                projectileCounter = 15;
+                round = 1;
+                roundStart = true;
+                score = 0;
+                baseHealth = 25;
+                roundMobs = 0;
+                finalRound = false;
+                finalCounter = 0;
+                
+                //enemies.push(new tank(0, 0, 'downright', pSize, 0.5));
+                
+                updateInterval = setInterval(update, 33);                
+            }
+            
+            function update() {
+            //START PLAYER CONTROLLER
+                //store keys pressed down
+                $('#field').keydown(function(e) {
+                    if (keysdown[e.keyCode]) {
+                        return;
+                    }
+                    
+                    switch (e.which) {
+                        case 87: keysdown[e.which] = true; break;//w
+                        case 65: keysdown[e.which] = true; break;//a
+                        case 83: keysdown[e.which] = true; break;//s
+                        case 68: keysdown[e.which] = true; break;//d
+                        case 32: keysdown[e.which] = true; break;//space
+                    }
+                });
+                
+                //handle key release
+                $('#field').keyup(function(e) {
+                    delete keysdown[e.which];
+                });
+                
+                //call functions related to movement
+                if (keysdown[87] && keysdown[65] && !loss) {
+                    
+                        player.move('upleft');
+                    
+                } else if (keysdown[83] && keysdown[65] && !loss) {
+                    
+                        player.move('downleft');
+                    
+                } else if (keysdown[87] && keysdown[68] && !loss) {
+                    
+                        player.move('upright');
+                    
+                } else if (keysdown[83] && keysdown[68] && !loss) {
+                    
+                        player.move('downright');
+                    
+                } else if (keysdown[87] && !loss) {
+                    
+                        player.move('up');
+                    
+                } else if (keysdown[65] && !loss) {
+                    
+                        player.move('left');
+                    
+                } else if (keysdown[83] && !loss) {
+                    
+                        player.move('down');
+                    
+                } else if (keysdown[68] && !loss) {
+                    
+                        player.move('right');
+                    
+                }
+                
+                //call functions related to player projectiles
+                if (keysdown[32] && projectileCounter === 15) {
+                    projectileCounter = 0;
+                    //player.dir = 'fire';
+                    projectiles.push(new projectile(player.x + pSize/2 - 2, player.y + pSize/2 - 2, width, height, player.dir, true));
+                    fireSound.play();
+                    fireSound.currentTime = 0;
+                    //handle firing projectile
+                }
+                else {
+                    //handles reload time/delay
+                    if (projectileCounter < 15) {
+                        projectileCounter += 1;
+                    }
+                }
+            //END CONTROLLER
+                
+            //PROJECTILE CONTROLLER
+                //move projectiles while determining if they are within play area
+                for (var i = 0; i < projectiles.length; i++) {
+                    projectiles[i].move();
+                    if(!projectiles[i].inBounds()) {
+                        projectiles.splice(i, 1);
+                    }
+                    if(difficulty == "2") {
+                        //medium difficulty, need to stop projectiles on contact with base
+                        
+                    }
+                    
+                }
+                for (var i = 0; i < enemyProj.length; i++) {
+                    enemyProj[i].move();
+                    if (!enemyProj[i].inBounds()) {
+                        enemyProj.splice(i, 1);
+                    }
+                }
+            //END CONTROLLER
+                
+            //MOB CONTROLLER
+                //GENERATE MOBS EVERY COUPLE OF SECONDS
+                
+                if (roundStart && roundMobs < round*2 ) {
+                    
+                    if (spawnCounter === 30 - (round * 2)) {
+                        var dirVal = Math.floor(Math.random() * 7);
+                        var tankDir = 'down';
+                        var tankX = width / 2;
+                        var tankY = 0;
+                        switch (dirVal) {
+                            case 0: tankDir = 'down'; tankX = width / 2; tankY = 0; break;
+                            case 1: tankDir = 'downleft'; tankX = width; tankY = 0; break;
+                            case 2: tankDir = 'left'; tankX = width; tankY = height / 2 ;break;
+                            case 3: tankDir = 'upleft'; tankX = width; tankY = height; break;
+                            case 4: tankDir = 'up'; tankX = width / 2; tankY = height; break;
+                            case 5: tankDir = 'upright'; tankX = 0; tankY = height; break;
+                            case 6: tankDir = 'right'; tankX = 0; tankY = height / 2; break;
+                            case 7: tankDir = 'downright'; tankX = 0; tankY = 0; break;
+                        }
+                        var temp = new tank(tankX - (pSize/2),tankY - (pSize/2),tankDir,pSize,.25);
+                        roundMobs += 1;
+                        temp.counter = 0;
+                        enemies.push(temp);
+                        spawnCounter = 0;
+                    } else {
+                        spawnCounter++;
+                    }
+                    
+                } else {
+                    roundMobs = 0;
+                    roundStart = false;
+                }
+                
+                
+                //RIGHT HERE ^
+                
+                
+                //MOVE EACH TANK
+                for (var j = 0; j < enemies.length; j++) {
+                    if (!enemies[j].inBounds(enemies[j].dir)) {
+                        enemies[j].fireLoop();
+                    }
+                    else {
+                        enemies[j].move(enemies[j].dir);
+                    }
+                }
+                //RIGHT HERE ^
+            //END CONTROLLER
+                
+            
+                detectCollisions();
+                
+                
+                if (enemies.length < 1 && !roundStart) {
+                    roundSwitch();
+                }
+                draw();
+                gameOver();
+            }
+            //draw everything
+            function draw() {
+                //clear screen
+                ctx.clearRect(0,0,width,height);
+                //handle projectile movement
+                
+                //draw health bar
+                ctx.fillStyle = 'rgba(50, 50, 50, 1)';
+                ctx.fillRect((canvas.width/2) - (pSize*2), (canvas.width/2) - (pSize*2) - 20, pSize*4, 10);
+                ctx.fillStyle = 'rgba(150, 0, 0, 1)';
+                ctx.fillRect((canvas.width/2) - (pSize*2) + 2, (canvas.width/2) - (pSize*2) - 18, (pSize*4 - 4) * (baseHealth/25), 6);
+                
+                //draw rounds and score
+                ctx.font = "40px retroFont";
+                ctx.fillStyle = 'rgb(0,0,0)';
+                ctx.fillText("Round: " + round, 20, 40, 100);
+                ctx.fillText("Score: " + score, width - 120, 40, 100);
+                
+                //draw BASE
+                ctx.drawImage(base1, width/2 - (pSize*2), height/2 - (pSize*2), pSize * 4, pSize * 4);
+                
+                ctx.fillStyle = 'rgb(5,5,5)';
+                for (var i = 0; i < projectiles.length; i++) {
+                    ctx.fillRect(projectiles[i].x, projectiles[i].y, 3, 3);
+                }
+                //handle mob movement
+                for (var j = 0; j < enemies.length; j++) {
+                    switch(enemies[j].dir) {
+                        case 'up': ctx.drawImage(up, enemies[j].x, enemies[j].y, pSize, pSize); break;
+                        case 'down': ctx.drawImage(down, enemies[j].x, enemies[j].y, pSize, pSize); break;
+                        case 'left': ctx.drawImage(left, enemies[j].x, enemies[j].y, pSize, pSize); break;
+                        case 'right': ctx.drawImage(right, enemies[j].x, enemies[j].y, pSize, pSize); break;
+                        case 'upright': ctx.drawImage(upright, enemies[j].x, enemies[j].y, pSize, pSize); break;
+                        case 'downright': ctx.drawImage(downright, enemies[j].x, enemies[j].y, pSize, pSize); break;
+                        case 'upleft': ctx.drawImage(upleft, enemies[j].x, enemies[j].y, pSize, pSize); break;
+                        case 'downleft': ctx.drawImage(downleft, enemies[j].x, enemies[j].y, pSize, pSize); break;
+                    }
+                }
+                
+                //handle player movement
+                if (!loss) {
+                    switch(player.dir) {
+                        case 'up': ctx.drawImage(up, player.x, player.y, pSize, pSize); break;
+                        case 'down': ctx.drawImage(down, player.x, player.y, pSize, pSize); break;
+                        case 'left': ctx.drawImage(left, player.x, player.y, pSize, pSize); break;
+                        case 'right': ctx.drawImage(right, player.x, player.y, pSize, pSize); break;
+                        case 'upright': ctx.drawImage(upright, player.x, player.y, pSize, pSize); break;
+                        case 'downright': ctx.drawImage(downright, player.x, player.y, pSize, pSize); break;
+                        case 'upleft': ctx.drawImage(upleft, player.x, player.y, pSize, pSize); break;
+                        case 'downleft': ctx.drawImage(downleft, player.x, player.y, pSize, pSize); break;
+                    }
+                }
+                
+                
+                //EXLPOSIONS CONTROLLER???
+                for (var k = 0; k < explosions.length; k++) {
+                    explosions[k].draw();
+                    explosions[k].i += 1;
+                    if (explosions[k].i > 12) {
+                        explosions.splice(k, 1);
+                    }
+                }
+                
+                for (var l = 0; l < enemyProj.length; l++) {
+                    ctx.fillRect(enemyProj[l].x, enemyProj[l].y, 3, 3);
+                }
+            //END CONTROLLER
+            }
+            
+            tank.prototype.counter = function(count) {
+                this.counter = count
+            }
+            
+            tank.prototype.inBounds = function(dir) {
+                switch(dir) {
+                    case 'up': return this.y > (height / 2) + (pSize * 4) - (pSize / 2); break;
+                    case 'down': return this.y < (height / 2) - (pSize * 4) - (pSize / 2); break;
+                    case 'left': return this.x > (width / 2) + (pSize * 4) - (pSize / 2); break;
+                    case 'right': return this.x < (width / 2) - (pSize * 4) - (pSize / 2); break;
+                    case 'upright': return this.y > (height / 2) + (pSize * 3) - (pSize / 2); break;
+                    case 'downright': return this.y < (height / 2) - (pSize * 3) - (pSize / 2); break;
+                    case 'upleft': return this.y > (height / 2) + (pSize * 3) - (pSize / 2); break;
+                    case 'downleft': return this.y < (height / 2) - (pSize * 3) - (pSize / 2); break; 
+                }
+            }
+            
+            tank.prototype.fireLoop = function() {
+                if (this.counter === 25) {
+                    this.counter = 0;
+                    //player.dir = 'fire';
+                    enemyProj.push(new projectile(this.x + pSize/2 - 2, this.y + pSize/2 - 2, width, height, this.dir, true));
+                    fireSound.play();
+                    fireSound.currentTime = 0;
+                    //handle firing projectile
+                }
+                else {
+                    this.counter += 1;
+                }
+            }
+            
+            function detectCollisions() {
+                //detect tank-tank collisions
+                for (var i = 0; i < enemies.length; i++) {
+                    if (enemies[i].x - player.x < pSize && enemies[i].x - player.x > -pSize && enemies[i].y - player.y < pSize && enemies[i].y - player.y > -pSize && !loss) {
+                        //COLLISION PROPERLY DETECTS. DO SOMETHING WITH THAT.
+                        explosions.push(new explosion(player.x, player.y, 1));
+                        explosionSound.play();
+                        explosionSound.currentTime = 0;
+                        loss = true;
+                    }
+                }
+                //detect enemyTank-projectile collisions
+                for (var j = 0; j < projectiles.length; j++) {
+                    for (var k = 0; k < enemies.length; k++) {
+                        if (projectiles[j].x - enemies[k].x < pSize + (pSize / 2) && projectiles[j].x - enemies[k].x > -pSize + (pSize / 2) && projectiles[j].y - enemies[k].y < pSize + (pSize / 2) && projectiles[j].y - enemies[k].y > -pSize + (pSize / 2) && projectiles[j].active) {
+                            //console.log('BOOM! Another one down!');
+                            projectiles[j].active = false;
+                            explosions.push(new explosion(enemies[k].x, enemies[k].y, 1));
+                            explosionSound.play();
+                            explosionSound.currentTime = 0;
+                            scrapPr.push(projectiles[j]);
+                            scrapEn.push(enemies[k]);
+                            score += 1;
+                            console.log ("Score:" + score);
+                        }
+                    }
+                }
+                for (var i = scrapPr.length - 1; i >= 0; i--) {
+                    projectiles.splice(projectiles.indexOf(scrapPr[i]), 1);
+                    scrapPr.pop();
+                }
+                for (var i = scrapEn.length - 1; i >= 0; i--) {
+                    enemies.splice(enemies.indexOf(scrapEn[i]), 1);
+                    scrapEn.pop();
+                }
+
+                //detect enemyProj - objective colision
+                for (var k = 0; k < enemyProj.length; k++) {
+                    if (enemyProj[k].x < (width/2) + (base1.width) && 
+                        enemyProj[k].x > (width/2) - (base1.width) &&
+                        enemyProj[k].y < (height/2) + (base1.height) &&
+                        enemyProj[k].y > (height/2) - (base1.height)) {
+                            explosions.push(new explosion(enemyProj[k].x - (ex1.width/2), enemyProj[k].y - (ex1.height/2), 1));
+                            explosionSound.play();
+                            baseHealth -= 1;
+                            console.log(baseHealth);
+                            enemyProj.splice(k, 1);
+                    }
+                }
+                if (difficulty == "2" || difficulty == "3") {
+                    for (var i = 0; i < projectiles.length; i++) {
+                        if (projectiles[i].x < (width/2) + (base1.width) && 
+                        projectiles[i].x > (width/2) - (base1.width) &&
+                        projectiles[i].y < (height/2) + (base1.height) &&
+                        projectiles[i].y > (height/2) - (base1.height)) {
+                            if (difficulty == "3") {
+                                explosions.push(new explosion(projectiles[i].x - (ex1.width/2), projectiles[i].y - (ex1.height/2), 1));
+                                explosionSound.play();
+                                baseHealth -= 1;
+                                console.log(baseHealth);
+                            }
+                            projectiles.splice(k, 1);
+                        }
+                    }
+                }
+                
+            }
+            
+            function explosion(x, y, frame) {
+                this.x = x;
+                this.y = y;
+                this.i = frame;
+                
+                this.draw = function draw() {
+                    switch(this.i) {
+                        case 1: ctx.drawImage(ex1, this.x, this.y); break;
+                        case 2: ctx.drawImage(ex1, this.x, this.y); break;
+                        case 3: ctx.drawImage(ex2, this.x, this.y); break;
+                        case 4: ctx.drawImage(ex2, this.x, this.y); break;
+                        case 5: ctx.drawImage(ex3, this.x, this.y); break;
+                        case 6: ctx.drawImage(ex3, this.x, this.y); break;
+                        case 7: ctx.drawImage(ex4, this.x, this.y); break;
+                        case 8: ctx.drawImage(ex4, this.x, this.y); break;
+                        case 9: ctx.drawImage(ex5, this.x, this.y); break;
+                        case 10: ctx.drawImage(ex5, this.x, this.y); break;
+                        case 11: ctx.drawImage(ex6, this.x, this.y); break;
+                        case 12: ctx.drawImage(ex6, this.x, this.y); break;
+                    }
+                }
+            }
+            
+            function roundSwitch() {
+                console.log("round: " + round);
+                roundStart = true;
+                round++;
+                roundSound.play();
+            }
+            
+            function gameOver() {
+                if (baseHealth <= 0) {
+                    alert("Game Over! You lose!");
+                    alert("You survived until round " + round + " and scored " + score + " points!");
+                    startUp();
+                }
+                if (round === 15) {
+                    alert("You win!");
+                    alert("You survived 15 rounds! Your final score was " + score + " points, and the base was left with " + 100 - (((25-baseHealth)/25) * 100) + "% health!");
+                    startUp();
+                }
+                if (loss) {
+                    if (finalCounter === 66) {
+                        alert("Game over! You lose!");
+                        startUp();
+                    }
+                    else {
+                        finalCounter += 1;
+                    }
+                }
+            }
+            
+            function menuScreen() {
+                clearInterval(updateInterval);
+                ctx.clearRect(0,0,width,height);
+                ctx.fillStyle = 'rgba(50,50,50,0.2)';
+                ctx.fillRect(width/4 - 40, height/4 + 8, width/2 + 32, height/2 + 32);
+                ctx.fillStyle = 'rgb(75,75,75)';
+                ctx.fillRect(width/4 - 16, height/4 - 16, width/2 + 32, height/2 + 32);
+                ctx.fillStyle = 'rgb(50,50,50)';
+                ctx.fillRect(width/4, height/4, width/2, height/2);
+                ctx.fillStyle = 'rgb(80,80,80)';
+                ctx.fillRect(width/3, height/2 - 40, width/3, 80);
+                ctx.font = '60px retroFont';
+                ctx.fillStyle = 'rgb(0,170,7)';
+                ctx.fillText('PLAY', width/2 - 50, height/2 + 16, 100);
+                ctx.font = '80px retroFont';
+                ctx.fillText('TANK!TANK', width/2 - 150, height/3, 300);
+                ctx.font = '40px retroFont';
+                ctx.fillText('W', width/3, height - height/3 - 30, 25);
+                ctx.fillText('A', width/3 - 35, height - height/3 + 5, 25);
+                ctx.fillText('S', width/3, height - height/3 + 40, 25);
+                ctx.fillText('D', width/3 + 35, height - height/3 + 5, 25);
+                ctx.fillText('SPACE BAR', width/2 - 20, height - height/3 + 20, 175);
+            }
+            
+        </script>
+    </body>
+</html>
